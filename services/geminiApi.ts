@@ -1,7 +1,7 @@
 // Install dependencies: npm install @google/genai mime
 import { GoogleGenAI } from '@google/genai';
 
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 'AIzaSyADZYTbsSZJ7CeAuGNqm_6DylT8Bk2cPeI';
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
 export interface Recipe {
   title: string;
