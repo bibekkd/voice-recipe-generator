@@ -31,7 +31,10 @@ export default function GenerationsScreen() {
           </TouchableOpacity>
 
           {/* Photo to Recipe */}
-          <TouchableOpacity className='bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-4'>
+          <TouchableOpacity 
+            onPress={() => router.push("/(tabs)/generate/photoToRecipe")}
+            className='bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-4'
+          >
             <View className='flex-row items-center mb-3'>
               <View className='bg-green-100 p-3 rounded-full mr-4'>
                 <Ionicons name="camera" size={24} color="#10B981" />
@@ -45,7 +48,10 @@ export default function GenerationsScreen() {
           </TouchableOpacity>
 
           {/* Recipe Name to Recipe */}
-          <TouchableOpacity className='bg-white p-6 rounded-xl shadow-sm border border-gray-100'>
+          <TouchableOpacity 
+            onPress={() => router.push("/(tabs)/generate/recipeNameToRecipe")}
+            className='bg-white p-6 rounded-xl shadow-sm border border-gray-100'
+          >
             <View className='flex-row items-center mb-3'>
               <View className='bg-purple-100 p-3 rounded-full mr-4'>
                 <Ionicons name="book" size={24} color="#8B5CF6" />
