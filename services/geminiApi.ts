@@ -339,3 +339,139 @@ Return only valid JSON without any markdown formatting or additional text.`;
     throw new Error(`Failed to generate recipes: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
+
+export const generateRecipesFromImage = async (imageBase64: string, mimeType: string): Promise<RecipeResponse> => {
+  try {
+    // Check if API key is available
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is not configured');
+    }
+
+    console.log('API Key available:', !!GEMINI_API_KEY);
+    console.log('Image base64 length:', imageBase64.length);
+    console.log('Mime type:', mimeType);
+
+    const ai = new GoogleGenAI({
+      apiKey: GEMINI_API_KEY,
+    });
+
+    const model = 'gemini-2.5-pro';
+    console.log('Using model:', model);
+    
+    const prompt = `Analyze this food image and generate a complete recipe for the dish shown.
+
+Please provide the response in the following JSON format:
+{
+  "recipes": [
+    {
+      "title": "Recipe Name",
+      "description": "Brief description of the dish based on what you see in the image",
+      "ingredients": ["ingredient 1 with quantity", "ingredient 2 with quantity", "ingredient 3 with quantity"],
+      "instructions": ["Step 1", "Step 2", "Step 3"],
+      "cookingTime": "30 minutes",
+      "difficulty": "Easy/Medium/Hard",
+      "servings": "4 servings"
+    }
+  ]
+}
+
+Instructions:
+1. Identify the dish in the image
+2. Generate a complete recipe that would result in the dish shown
+3. Include all necessary ingredients with appropriate quantities
+4. Provide clear, step-by-step cooking instructions
+5. Estimate cooking time, difficulty level, and number of servings
+6. Make sure the recipe is practical and achievable for home cooking
+
+Return only valid JSON without any markdown formatting or additional text.`;
+
+    const config = {
+      thinkingConfig: {
+        thinkingBudget: -1,
+      },
+    };
+
+    const contents = [
+      {
+        role: 'user',
+        parts: [
+          {
+            inlineData: {
+              data: imageBase64,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: prompt,
+          },
+        ],
+      },
+    ];
+
+    console.log('Making API call to Gemini with image...');
+    
+    const result = await ai.models.generateContent({
+      model,
+      config,
+      contents,
+    });
+
+    if (!result.candidates || result.candidates.length === 0) {
+      throw new Error('No candidates received from Gemini API');
+    }
+
+    const candidate = result.candidates[0];
+
+    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      throw new Error('No content in candidate response');
+    }
+
+    const part = candidate.content.parts[0];
+
+    if (!part.text) {
+      throw new Error('No text in response part');
+    }
+
+    const fullResponse = part.text;
+    console.log('Raw response:', fullResponse);
+    
+    // Clean the response text to remove markdown formatting
+    const cleanedResponse = fullResponse
+      .replace(/```json\s*/g, '')  // Remove opening ```json
+      .replace(/```\s*$/g, '')     // Remove closing ```
+      .trim();
+    
+    console.log('Cleaned response:', cleanedResponse);
+    
+    // Parse the JSON response
+    const recipeData = JSON.parse(cleanedResponse);
+    
+    // Validate the response structure
+    if (!recipeData.recipes || !Array.isArray(recipeData.recipes)) {
+      throw new Error('Invalid response format from AI');
+    }
+    
+    console.log('Successfully parsed recipes from image:', recipeData.recipes.length);
+    return recipeData;
+  } catch (error) {
+    console.error('Error generating recipes from image:', error);
+    
+    // Provide more specific error handling
+    if (error instanceof SyntaxError) {
+      console.error('Failed to parse JSON response:', error.message);
+      throw new Error('Failed to parse AI response. Please try again.');
+    }
+    
+    // Check for API key errors
+    if (error instanceof Error && error.message.includes('API key')) {
+      throw new Error('Invalid API key. Please check your configuration.');
+    }
+    
+    // Check for network errors
+    if (error instanceof Error && error.message.includes('fetch')) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+    
+    throw new Error(`Failed to generate recipes from image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};

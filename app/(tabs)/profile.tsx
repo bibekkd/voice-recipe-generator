@@ -1,19 +1,66 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function ProfileScreen() {
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: signOut,
+        },
+      ]
+    );
+  };
+
+  const getUserDisplayName = () => {
+    if (user?.user_metadata?.username) {
+      return user.user_metadata.username;
+    }
+    if (user?.email) {
+      return user.email.split('@')[0];
+    }
+    return 'User';
+  };
+
+  const getUserEmail = () => {
+    return user?.email || 'No email';
+  };
+
+  const getMemberSince = () => {
+    if (user?.created_at) {
+      const date = new Date(user.created_at);
+      return date.getFullYear();
+    }
+    return '2024';
+  };
+
   return (
     <SafeAreaView className='flex-1 bg-gray-50'>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
         <View className='bg-white px-4 py-6 border-b border-gray-100'>
           <View className='flex-row items-center mb-4'>
-            <View className='w-20 h-20 bg-gray-300 rounded-full mr-4' />
+            <View className='w-20 h-20 bg-gray-300 rounded-full mr-4 items-center justify-center'>
+              <Text className='text-2xl font-bold text-gray-600'>
+                {getUserDisplayName().charAt(0).toUpperCase()}
+              </Text>
+            </View>
             <View className='flex-1'>
-              <Text className='text-2xl font-bold text-gray-900'>John Doe</Text>
+              <Text className='text-2xl font-bold text-gray-900'>{getUserDisplayName()}</Text>
               <Text className='text-gray-600'>Home Chef</Text>
-              <Text className='text-gray-500 text-sm'>Member since 2024</Text>
+              <Text className='text-gray-500 text-sm'>Member since {getMemberSince()}</Text>
             </View>
             <TouchableOpacity className='bg-gray-100 p-3 rounded-full'>
               <Ionicons name="settings-outline" size={20} color="#6B7280" />
@@ -151,10 +198,18 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
             </TouchableOpacity>
             
-            <TouchableOpacity className='flex-row items-center p-4'>
+            <TouchableOpacity className='flex-row items-center p-4 border-b border-gray-100'>
               <Ionicons name="help-circle-outline" size={20} color="#6B7280" />
               <Text className='ml-3 flex-1 text-gray-900'>Help & Support</Text>
               <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              className='flex-row items-center p-4'
+              onPress={handleSignOut}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+              <Text className='ml-3 flex-1 text-red-500 font-medium'>Sign Out</Text>
             </TouchableOpacity>
           </View>
         </View>

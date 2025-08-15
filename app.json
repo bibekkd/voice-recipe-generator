@@ -9,14 +9,26 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to camera to take photos of food for recipe generation.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select food images for recipe generation."
+      },
+      "bundleIdentifier": "com.bibek2025.voicerecipegenerator"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.bibek2025.voicerecipegenerator"
     },
     "web": {
       "bundler": "metro",
@@ -32,6 +44,13 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you select food images for recipe generation.",
+          "cameraPermission": "The app accesses your camera to let you take photos of food for recipe generation."
         }
       ]
     ],

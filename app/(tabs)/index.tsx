@@ -1,10 +1,178 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import React, { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Modal,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { generateRecipesFromImage, generateRecipesFromIngredients, Recipe } from '../../services/geminiApi';
+
+const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
-  const [value, onChangeText] = React.useState('');
+  const [value, onChangeText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const requestPermissions = useCallback(async () => {
+    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (cameraStatus !== 'granted' || mediaStatus !== 'granted') {
+      Alert.alert(
+        'Permissions Required',
+        'Camera and media library permissions are required to use this feature.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  }, []);
+
+  const generateFromText = useCallback(async () => {
+    if (!value.trim() || loading) return;
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await generateRecipesFromIngredients(value.trim());
+      setRecipes(response.recipes);
+      setShowRecipeModal(true);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to generate recipes');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to generate recipes. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [value, loading]);
+
+  const handlePhotoRecipe = useCallback(async () => {
+    const hasPermissions = await requestPermissions();
+    if (!hasPermissions) return;
+
+    Alert.alert(
+      'Photo Recipe',
+      'Choose how you want to add a photo',
+      [
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: 'Choose from Gallery', onPress: pickImage },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  }, [requestPermissions]);
+
+  const takePhoto = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setSelectedImage(asset.uri);
+        generateFromImage(asset.uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
+  }, []);
+
+  const pickImage = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setSelectedImage(asset.uri);
+        generateFromImage(asset.uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  }, []);
+
+  const generateFromImage = useCallback(async (imageUri: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const base64 = reader.result as string;
+            const base64Data = base64.split(',')[1];
+            const mimeType = blob.type || 'image/jpeg';
+            
+            const recipeResponse = await generateRecipesFromImage(base64Data, mimeType);
+            
+            if (recipeResponse.recipes && recipeResponse.recipes.length > 0) {
+              setRecipes(recipeResponse.recipes);
+              setShowRecipeModal(true);
+            } else {
+              setError('No recipe found for this image. Please try with a different food image.');
+            }
+          } catch (error) {
+            console.error('Error generating recipe:', error);
+            setError(error instanceof Error ? error.message : 'Failed to generate recipe');
+          } finally {
+            setLoading(false);
+          }
+        };
+        reader.onerror = () => {
+          setError('Failed to process image');
+          setLoading(false);
+        };
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Error processing image:', error);
+      setError('Failed to process image');
+      setLoading(false);
+    }
+  }, []);
+
+  const handleVoiceRecipe = useCallback(() => {
+    Alert.alert(
+      'Voice Recipe',
+      'Voice functionality coming soon! For now, use the text input or photo feature.',
+      [{ text: 'OK' }]
+    );
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setShowRecipeModal(false);
+    setRecipes([]);
+    setSelectedImage(null);
+    setError(null);
+  }, []);
+
   return (
     <SafeAreaView className='flex-1 bg-cream'>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -18,28 +186,52 @@ export default function HomeScreen() {
         <View className='px-4 mb-6'>
           <View className='relative mb-4'>
             <TextInput
-              editable
+              editable={!loading}
               multiline
               numberOfLines={3}
               maxLength={200}
               onChangeText={text => onChangeText(text)}
               value={value}
-              placeholder="What ingredients do you have? Or describe a dish you want to make..."
+              placeholder="What ingredients do you have ? "
               placeholderTextColor="#9CA3AF"
               className='w-full font-quicksand text-lg min-h-[56px] bg-white border border-gray-200 rounded-2xl px-4 py-3 pr-16 text-grayText shadow-sm focus:border-primary focus:shadow-md'
             />
             <TouchableOpacity 
-              className='absolute right-3 bottom-3 bg-primary w-10 h-10 rounded-full items-center justify-center shadow-sm'
+              onPress={generateFromText}
+              disabled={!value.trim() || loading}
+              className={`absolute right-3 bottom-3 w-10 h-10 rounded-full items-center justify-center shadow-sm ${
+                value.trim() && !loading ? 'bg-primary' : 'bg-gray-300'
+              }`}
             >
-              <Ionicons name="send" size={18} color="white" />
+              {loading ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Ionicons name="send" size={18} color="white" />
+              )}
             </TouchableOpacity>
           </View>
+          
+          {error && (
+            <View className='flex-row items-center bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4'>
+              <Ionicons name="alert-circle-outline" size={20} color="#EF4444" />
+              <Text className='text-red-700 text-sm ml-2 flex-1'>{error}</Text>
+            </View>
+          )}
+
           <View className='flex-row gap-4'>
-            <TouchableOpacity className='flex-1 bg-cream border border-[#FF6347] py-4 rounded-xl items-center'>
+            <TouchableOpacity 
+              onPress={handleVoiceRecipe}
+              disabled={loading}
+              className='flex-1 bg-cream border border-[#FF6347] py-4 rounded-xl items-center'
+            >
               <Ionicons name="mic" size={24} color="#f78f07" />
               <Text className='text-[#f78f07] font-medium mt-2'>Voice Recipe</Text>
             </TouchableOpacity>
-            <TouchableOpacity className='flex-1 bg-secondaryTwo py-4 rounded-xl items-center'>
+            <TouchableOpacity 
+              onPress={handlePhotoRecipe}
+              disabled={loading}
+              className='flex-1 bg-secondaryTwo py-4 rounded-xl items-center'
+            >
               <Ionicons name="camera" size={24} color="white" />
               <Text className='text-white font-medium mt-2'>Photo Recipe</Text>
             </TouchableOpacity>
@@ -75,9 +267,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className='space-x-4'>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className=''>
             {/* Recipe Card 1 */}
-            <View className='bg-white rounded-xl shadow-sm border border-gray-100 w-48 overflow-hidden'>
+            <View className='bg-white rounded-xl shadow-sm border border-gray-100 w-48 overflow-hidden mr-2'>
               <View className='bg-gray-100 w-full h-32 items-center justify-center'>
                 <Ionicons name="image-outline" size={32} color="#9CA3AF" />
               </View>
@@ -141,6 +333,68 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Recipe Modal */}
+      <Modal
+        visible={showRecipeModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView className="flex-1 bg-cream">
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <Text className="text-xl font-bold text-gray-900">Generated Recipes</Text>
+            <TouchableOpacity onPress={closeModal} className="p-2">
+              <Ionicons name="close" size={24} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView className="flex-1 p-4" showsVerticalScrollIndicator={false}>
+            {recipes.map((recipe, index) => (
+              <View key={index} className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-gray-100">
+                <Text className="text-xl font-bold text-gray-900 mb-2">{recipe.title}</Text>
+                <Text className="text-gray-600 mb-4">{recipe.description}</Text>
+                
+                <View className="flex-row justify-around items-center bg-cream rounded-xl py-3 mb-4">
+                  <View className="flex-row items-center space-x-1">
+                    <Ionicons name="time-outline" size={16} color="#6B7280" />
+                    <Text className="text-gray-700 text-sm">{recipe.cookingTime}</Text>
+                  </View>
+                  <View className="flex-row items-center space-x-1">
+                    <Ionicons name="people-outline" size={16} color="#6B7280" />
+                    <Text className="text-gray-700 text-sm">{recipe.servings}</Text>
+                  </View>
+                  <View className="flex-row items-center space-x-1">
+                    <Ionicons name="trending-up-outline" size={16} color="#6B7280" />
+                    <Text className="text-gray-700 text-sm">{recipe.difficulty}</Text>
+                  </View>
+                </View>
+
+                <View className="mb-4">
+                  <Text className="text-lg font-semibold text-gray-900 mb-2">Ingredients</Text>
+                  {recipe.ingredients.map((ingredient, idx) => (
+                    <View key={idx} className="flex-row items-center mb-1">
+                      <Ionicons name="ellipse" size={6} color="#3B82F6" />
+                      <Text className="text-gray-800 text-sm ml-2">{ingredient}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View>
+                  <Text className="text-lg font-semibold text-gray-900 mb-2">Instructions</Text>
+                  {recipe.instructions.map((instruction, idx) => (
+                    <View key={idx} className="flex-row items-start mb-3">
+                      <View className="w-6 h-6 rounded-full bg-primary items-center justify-center mt-1">
+                        <Text className="text-white font-bold text-xs">{idx + 1}</Text>
+                      </View>
+                      <Text className="text-gray-800 text-sm ml-2 flex-1">{instruction}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
